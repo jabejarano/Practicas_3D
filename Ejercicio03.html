@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Draw Points</title>
+</head>
+  <!-- Creamos el canvas --> 
+<body onload="init()">
+    <canvas id="myCanvas" width="640" height="480"></canvas> 
+</body>
+
+  <!--VERTEX SHADER (Posición del elemento y tamaño)-->
+<script id="shaderVs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    attribute float a_Size;
+    void main() {
+        gl_Position = a_Position;
+        gl_PointSize = a_Size;
+    }
+</script>
+
+  <!-- FRAGMENT SHADER (color del elemento)-->
+<script id="shaderFs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec4 u_FragColor;
+    void main() {
+        gl_FragColor = u_FragColor;
+    }
+</script>
+
+<script>
+    //Creamos las dos variables que nos permita guardar el color y la posicion de los puntos
+    var point = [];
+    var color = [];
+    var tamano = [];
+
+    function init() {
+        // En JavaScript necesitamos obtener el <canvas> que hemos creado función getElementById
+        var canvas = document.getElementById("myCanvas");
+        // Ahora creamos el contexto para elementos 3D, utilizando webgl
+        var gl = canvas.getContext("webgl");
+        // Register event handler
+        canvas.onmousedown = function(ev) {
+          click(ev, gl, canvas);
+        }
+        // Obtenemos los shaders mediante el método getElementById
+        var vs = document.getElementById('shaderVs').innerHTML;
+        var fs = document.getElementById('shaderFs').innerHTML;
+        if (!initShaders(gl, vs, fs)) {
+            console.log('Failed to intialize shaders.');
+            return;
+        }
+
+        // Usamos las funciones de WebGL para dar color al fondo al iniciar la app
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        // Mediante el método clear se realiza el coloreado en base al color previamente definido
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+      }
+
+    function click(ev, gl, canvas) {
+
+        // Coordinates of canvas origin
+        var rect = ev.target.getBoundingClientRect();
+
+        // relative x coordinate of click in canvas
+        var clickX = ev.clientX - rect.left;
+
+        // relative y coordinate of click in canvas
+        var clickY = ev.clientY - rect.top;
+
+        // WebGL coordinates (3D)
+        var halfCanvasWidth = canvas.width / 2;
+        var halfCanvasHeight = canvas.height / 2;
+        var x = (clickX - halfCanvasWidth) / halfCanvasWidth;
+        var y = (halfCanvasHeight - clickY) / halfCanvasHeight;
+        var xyz = [x, y, 0];
+        point.push(xyz);
+      
+
+        if (x < -0.7 || x > 0.7 || y < -0.7 || y > 0.7 ){
+          //bordes blancos
+          var rgba = [1.0, 1.0, 1.0, 1.0];
+        //Hacemos bucle para relacionar colores con cuadrantes
+        }else if (x>=0 && y>=0){
+          var rgba = [0.0, 1.0, 0.0, 1.0];
+        }else if (x<=0 && y>=0){
+          var rgba = [1.0, 0.0, 0.0, 1.0];
+        }else if (x>=0 && y<=0){
+          var rgba = [1.0, 1.0, 0.0, 1.0];
+        }else if (x<=0 && y<=0){
+          var rgba = [0.0, 0.0, 1.0, 1.0];
+        }else if (x>=0.7 && y>=0.7){
+          var rgba = [1.0, 1.0, 1.0, 1.0];
+        }
+        color.push(rgba);
+       
+        // Tamaño según distancia
+        var size = 20.0*(((x**2)+(y**2))**0.5);
+        tamano.push(size);
+
+      
+
+        // Color de fondo durante la función (click y cambiar de color pixeles)
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        // Mediante el método clear se realiza el coloreado en base al color previamente definido
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+
+        // Vertices
+        var dim = 4;
+        //Creamos un bucle que nos permita dibujar todos los puntos sin borrarse
+        for(i=0; i < point.length; i++){
+          var vertices = new Float32Array(point[i]);
+          // Creamos un buffer, que es una memoria interna de WebGL
+          var vertexBuffer = gl.createBuffer();
+          if (!vertexBuffer) {
+              console.log('Failed to create the buffer object');
+              return -1;
+          }
+
+          //  Conectamos los buffers a los shaders
+          gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+          var a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+          if (a_Position < 0) {
+              console.log('Failed to get the storage location of a_Position');
+              return -1;
+          }
+          gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+          gl.enableVertexAttribArray(a_Position);
+
+          var a_Size = gl.getAttribLocation(gl.program, "a_Size");
+          gl.vertexAttrib1f(a_Size, tamano[i]);
+
+          // Creamos la variable que contiene el color
+          var u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
+          if (u_FragColor < 0) {
+              console.log('Failed to get the storage location of u_FragColor');
+              return -1;
+          }
+          // Se asigna a la variable el valor
+          gl.uniform4fv(u_FragColor, color[i]);
+
+          // Draw
+          gl.drawArrays(gl.POINTS, 0, 1)
+        }
+        };
+
+        // Una vez leídos los shaders, hay que inicializarlos
+    function initShaders(gl, vs_source, fs_source) {
+        // Compile shaders
+        var vertexShader = makeShader(gl, vs_source, gl.VERTEX_SHADER);
+        var fragmentShader = makeShader(gl, fs_source, gl.FRAGMENT_SHADER);
+        // objeto contenedor del programa
+        var glProgram = gl.createProgram();
+        // Se añaden los dos shaders
+        gl.attachShader(glProgram, vertexShader);
+        gl.attachShader(glProgram, fragmentShader);
+        // Hay que crear un objeto de tipo program para usar los shaders
+        gl.linkProgram(glProgram);
+        if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
+            alert("Unable to initialize the shader program");
+            return false;
+        }
+        // Se indica a JavaScript que utilice el programa
+        gl.useProgram(glProgram);
+        gl.program = glProgram;
+        return true;
+    }
+
+    
+    function makeShader(gl, src, type) {
+        // Crear el shader del tipo (type) indicado: createShader
+        var shader = gl.createShader(type);
+        // Linkar el shader que hemos creado a la variable JavaScript que contiene la función (source): shaderSource
+        gl.shaderSource(shader, src);
+        gl.compileShader(shader);
+        // Compilar el shader creado y linkado: compileShader
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert("Error compiling shader: " + gl.getShaderInfoLog(shader));
+            return;
+        }
+        return shader;
+    }
+</script>
+
+</html>

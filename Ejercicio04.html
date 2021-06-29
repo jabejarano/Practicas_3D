@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Draw 2 rectangle</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+</head>
+
+<body onload="init()">
+    <canvas id="myCanvas" width="640" height="640"></canvas>
+    <br>
+    Step: <input type="text" value="0.01" id="step">
+</body>
+<!-- Posicion inicial vertices vector tipo atrubite-->
+<!--Obtenemos matriz transformada mediante matriz tipo uniform-->
+<!-- Se calcula traslacion mediante transformación de matrices-->
+<script id="shaderVs" type="x-shader/x-vertex">
+    attribute vec4 a_Position;
+    uniform mat4 u_Matrix;
+    void main() {
+        gl_Position = u_Matrix * a_Position; 
+    }
+</script>
+
+<script id="shaderFs" type="x-shader/x-fragment">
+    
+    void main() {
+        gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+    }
+</script>
+
+<script>
+    var gl;
+    var move = [0.0, 0.0, 0.0];
+    var escalado = [1.0, 1.0, 1.0];
+    var rotation = 0.0;
+    var aprox1 = [0.0, 0.0, 0.0];
+    var aprox2 = [0.0, 0.0, 0.0];
+
+    function init() {
+        // Get canvas object from the DOM
+        var canvas = document.getElementById("myCanvas");
+
+        // Init WebGL context
+        gl = canvas.getContext("webgl");
+        // Init shaders
+        var vs = document.getElementById('shaderVs').innerHTML;
+        var fs = document.getElementById('shaderFs').innerHTML;
+        initShaders(gl, vs, fs);
+        // Write the positions of vertices to a vertex shader
+        initVertexBuffers(gl);
+
+        // Clear canvas color negro
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      
+        // Draw
+        drawScene();
+      }
+        document.onkeydown = function (ev) {
+            var step = new Number(document.getElementById("step").value);
+
+            switch (ev.keyCode) {
+            case 37: // Left
+              move[0] -= step
+              break;
+            case 39: // Right
+              move[0] += step
+              break;
+            case 38: // Up
+              move[1] += step
+              break;
+            case 40: // Down
+              move[1] -= step
+              break;
+            case 33: // PageUp
+            escalado[0] += step;
+            escalado[1] += step;
+              break;
+            case 34: // PageDown
+            escalado[0] -= step;
+            escalado[1] -= step;
+              break;
+            case 36: // Home
+            rotation += step
+              break
+            case 35: // End
+            rotation -= step
+              break;
+            case 107: // End
+              aprox1[0] -= step
+              aprox2[0] += step
+              break;
+            case 109: // End
+              aprox1[0] += step
+              aprox2[0] -= step
+              break;
+              case 109: // End
+              aprox1[0] += step
+              aprox2[0] -= step
+              break;
+            default:
+              console.log("holi, no pulses otra tecla, gracias :D");
+            }
+            drawScene();
+          };
+
+          function drawScene() {
+              // Clear canvas
+              gl.clear(gl.COLOR_BUFFER_BIT);
+
+            //creo las matrices de transformación; traslación, escalado, rotación y traslación.
+            // Usando los métodos correspondientes
+            var translated = mat4.fromTranslation(mat4.create(),move);
+            var scaled = mat4.fromScaling(mat4.create(),escalado);
+            var rotate = mat4.fromZRotation(mat4.create(),rotation);
+            var aproximacion1 = mat4.fromTranslation(mat4.create(),aprox1);
+            var aproximacion2 = mat4.fromTranslation(mat4.create(),aprox2);
+
+            //Multiplico las matrices con el metodo multiply
+            //Multiplico las dos primeras y el resultado por la siguiente.
+            var Matrix_ts = mat4.multiply(mat4.create(),translated, scaled);
+            var Matrix_tsr = mat4.multiply(mat4.create(),Matrix_ts, rotate);
+            var M_aprox1 = mat4.multiply(mat4.create(),Matrix_tsr, aproximacion1);
+            var M_aprox2 = mat4.multiply(mat4.create(),Matrix_tsr, aproximacion2);
+
+            var u_Matrix = gl.getUniformLocation(gl.program, "u_Matrix");
+            gl.uniformMatrix4fv(u_Matrix, false, M_aprox1);
+            // Draw
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            //LLamo M_aprox2 que es la multipicación de las tres matrices mas la de traslación
+            //Para que se acerque o aleje con + y -
+            gl.uniformMatrix4fv(u_Matrix, false, M_aprox2);
+            //Draw
+            gl.drawArrays(gl.TRIANGLES, 6, 6);
+          }   
+
+    function initVertexBuffers(gl) {
+        // Vertices
+        var dim = 3;
+        var vertices = [
+         0.2, 0.3, 0.3,//1
+         0.6, 0.3, 0.0,//2
+         0.6, -0.3, 0.0, //3 Triangle 1
+
+         0.2, -0.3, 0.0,//3
+         0.2, 0.3, 0.0,//1
+         0.6, -0.3, 0.0, //4 Triangle 2
+
+         -0.2, 0.3, 0.0,//1
+         -0.6, 0.3, 0.0,//2
+         -0.6, -0.3, 0.0, //3 Triangle 1
+
+         -0.2, 0.3, 0.0,//3
+         -0.2, -0.3, 0.0,//1
+         -0.6, -0.3, 0.0 //4 Triangle 2
+        ];
+
+        // Create a buffer object
+        var vertexBuffer = gl.createBuffer();
+        if (!vertexBuffer) {
+            console.log('Failed to create the buffer object');
+            return -1;
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+        //a_Position definida como atributo global en el vertex shader
+        //para cargar los vértices que están en el buffer
+        var a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+        gl.vertexAttrib3fv(a_Position, vertices)
+        gl.vertexAttribPointer(a_Position, dim, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(a_Position);
+    }
+
+    function initShaders(gl, vs_source, fs_source) {
+        // Compile shaders
+        var vertexShader = makeShader(gl, vs_source, gl.VERTEX_SHADER);
+        var fragmentShader = makeShader(gl, fs_source, gl.FRAGMENT_SHADER);
+
+        // Create program
+        var glProgram = gl.createProgram();
+
+        // Attach and link shaders to the program
+        gl.attachShader(glProgram, vertexShader);
+        gl.attachShader(glProgram, fragmentShader);
+        gl.linkProgram(glProgram);
+        // Use program
+        gl.useProgram(glProgram);
+        gl.program = glProgram;
+    }
+
+    function makeShader(gl, src, type) {
+        var shader = gl.createShader(type);
+        gl.shaderSource(shader, src);
+        gl.compileShader(shader);
+        return shader;
+    }
+</script>
+
+</html>
